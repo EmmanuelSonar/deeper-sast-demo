@@ -12,7 +12,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.RandomStringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -37,16 +36,19 @@ import static org.apache.commons.codec.binary.Base64.decodeBase64;
 @RestController
 public class UserController {
 
-    @Autowired
-    private UsersRepository usersRepository;
+    private final UsersRepository usersRepository;
 
-    @Autowired
-    private SessionsRepository sessionsRepository;
+    private final SessionsRepository sessionsRepository;
 
-    @Autowired
-    private EntityManager entityManager;
+    private final EntityManager entityManager;
 
     private LRUFileCache fileCache = new LRUFileCache(100);
+
+    public UserController(UsersRepository usersRepository, SessionsRepository sessionsRepository, EntityManager entityManager) {
+        this.usersRepository = usersRepository;
+        this.sessionsRepository = sessionsRepository;
+        this.entityManager = entityManager;
+    }
 
     @GetMapping("/")
     public RedirectView index(HttpServletRequest request) {
@@ -104,7 +106,7 @@ public class UserController {
                     extension = ".jpg";
                     break;
             }
-            String imageFile = FileUtils.getInstance().getUserImagePath(request.getRemoteUser()) + extension;
+            String imageFile = FileUtils.getUserImagePath(request.getRemoteUser()) + extension;
             final ByteArrayResource inputStream = new ByteArrayResource(fileCache.getFileBytes(imageFile));
             return ResponseEntity.status(HttpStatus.OK).contentLength(inputStream.contentLength()).body(inputStream);
         } catch (Exception e) {

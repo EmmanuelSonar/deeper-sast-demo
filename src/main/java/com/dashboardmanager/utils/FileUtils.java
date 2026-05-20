@@ -1,24 +1,27 @@
 package com.dashboardmanager.utils;
 
-public class FileUtils {
+import java.nio.file.Path;
 
-    private static FileUtils instance = null;
+public final class FileUtils {
 
     private static final String IMAGE_PATH = "./public/img/";
     private static final String USER_PATH = "./users/";
 
-    public static FileUtils getInstance() {
-        if (FileUtils.instance == null) FileUtils.instance = new FileUtils();
-        return FileUtils.instance;
+    private FileUtils() {
+        // Utility class, no instantiation
     }
 
-    public String getImagePath() {
+    public static String getImagePath() {
         return IMAGE_PATH;
     }
 
-    public String getUserImagePath(String username) {
-        String path = getImagePath();
-        path += EncodingUtils.getInstance().decodeParameter(username);
-        return path;
+    public static String getUserImagePath(String username) {
+        String decodedUsername = EncodingUtils.decodeParameter(username);
+        Path basePath = Path.of(getImagePath()).normalize().toAbsolutePath();
+        Path resolvedPath = basePath.resolve(decodedUsername).normalize().toAbsolutePath();
+        if (!resolvedPath.startsWith(basePath)) {
+            throw new IllegalArgumentException("Invalid username");
+        }
+        return resolvedPath.toString();
     }
 }
