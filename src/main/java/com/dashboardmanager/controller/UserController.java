@@ -12,7 +12,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.RandomStringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -26,6 +25,7 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.servlet.view.RedirectView;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -37,16 +37,19 @@ import static org.apache.commons.codec.binary.Base64.decodeBase64;
 @RestController
 public class UserController {
 
-    @Autowired
-    private UsersRepository usersRepository;
+    private final UsersRepository usersRepository;
 
-    @Autowired
-    private SessionsRepository sessionsRepository;
+    private final SessionsRepository sessionsRepository;
 
-    @Autowired
-    private EntityManager entityManager;
+    private final EntityManager entityManager;
 
     private LRUFileCache fileCache = new LRUFileCache(100);
+
+    public UserController(UsersRepository usersRepository, SessionsRepository sessionsRepository, EntityManager entityManager) {
+        this.usersRepository = usersRepository;
+        this.sessionsRepository = sessionsRepository;
+        this.entityManager = entityManager;
+    }
 
     @GetMapping("/")
     public RedirectView index(HttpServletRequest request) {
@@ -92,7 +95,7 @@ public class UserController {
     @GetMapping("/user/images")
     public ResponseEntity<Resource> getUserImage(ServletWebRequest request, @RequestParam(value = "image_quality") String imageQuality) {
         try {
-            String extension = "";
+            String extension;
             switch (imageQuality) {
                 case "scalable":
                     extension = ".svg";
@@ -103,9 +106,16 @@ public class UserController {
                 case "low":
                     extension = ".jpg";
                     break;
+                default:
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
             String imageFile = FileUtils.getInstance().getUserImagePath(request.getRemoteUser()) + extension;
-            final ByteArrayResource inputStream = new ByteArrayResource(fileCache.getFileBytes(imageFile));
+            Path imagePath = Path.of(imageFile).normalize();
+            Path basePath = Path.of(FileUtils.getInstance().getImagePath()).normalize();
+            if (!imagePath.startsWith(basePath)) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            final ByteArrayResource inputStream = new ByteArrayResource(fileCache.getFileBytes(imagePath.toString()));
             return ResponseEntity.status(HttpStatus.OK).contentLength(inputStream.contentLength()).body(inputStream);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -114,6 +124,9 @@ public class UserController {
 
     @PostMapping("/user/migrate")
     public ResponseEntity<Resource> migrateUser(@RequestParam(value = "username") String username) {
+        if (!username.matches("[a-zA-Z0-9_\\-]+")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
         try (var connection = getConnection()) {
             doMigrateUser(username, connection);
             return ResponseEntity.status(HttpStatus.OK).build();
