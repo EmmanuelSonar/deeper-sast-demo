@@ -168,7 +168,15 @@ public class UserController {
         if (sessionAuth != null) {
             try {
                 byte[] decoded = decodeBase64(sessionAuth);
-                ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(decoded));
+                ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(decoded)) {
+                    @Override
+                    protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
+                        if (!desc.getName().equals(SessionHeader.class.getName())) {
+                            throw new InvalidClassException("Unauthorized deserialization attempt", desc.getName());
+                        }
+                        return super.resolveClass(desc);
+                    }
+                };
                 return (SessionHeader) in.readObject();
             } catch (Exception e) {
                 return null;
